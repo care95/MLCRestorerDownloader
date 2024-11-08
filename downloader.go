@@ -155,18 +155,24 @@ func downloadFile(progressReporter ProgressReporter, client *http.Client, downlo
 	return nil
 }
 
-func DownloadTitle(titleID, outputDirectory string, progressReporter ProgressReporter, client *http.Client, commonKey []byte) error {
+func DownloadTitle(titleID, outputDirectory string, progressReporter ProgressReporter, client *http.Client, commonKey []byte, version string) error {
 	progressReporter.ResetTotals()
 
 	outputDir := strings.TrimRight(outputDirectory, "/\\")
-	baseURL := fmt.Sprintf("http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/%s", titleID)
+	var baseURL string
+
+	if version != "" {
+    		baseURL = fmt.Sprintf("http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/%s/tmd.%s", titleID, version)
+	} else {
+    		baseURL = fmt.Sprintf("http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/%s/tmd", titleID)
+	}
 
 	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
 		return err
 	}
 
 	tmdPath := filepath.Join(outputDir, "title.tmd")
-	if err := downloadFile(progressReporter, client, fmt.Sprintf("%s/%s", baseURL, "tmd"), tmdPath, true); err != nil {
+	if err := downloadFile(progressReporter, client, baseURL, tmdPath, true); err != nil {
 		return err
 	}
 
@@ -180,8 +186,9 @@ func DownloadTitle(titleID, outputDirectory string, progressReporter ProgressRep
 		return err
 	}
 
+	cetkURL := fmt.Sprintf("http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/%s/cetk", titleID)
 	tikPath := filepath.Join(outputDir, "title.tik")
-	if err := downloadFile(progressReporter, client, fmt.Sprintf("%s/%s", baseURL, "cetk"), tikPath, false); err != nil {
+	if err := downloadFile(progressReporter, client, cetkURL, tikPath, false); err != nil {
 		return err
 	}
 
@@ -205,14 +212,18 @@ func DownloadTitle(titleID, outputDirectory string, progressReporter ProgressRep
 	for i := 0; i < int(tmd.ContentCount); i++ {
 		i := i
 		g.Go(func() error {
-			filePath := filepath.Join(outputDir, fmt.Sprintf("%08X.app", tmd.Contents[i].ID))
-			if err := downloadFileWithSemaphore(ctx, progressReporter, client, fmt.Sprintf("%s/%08X", baseURL, tmd.Contents[i].ID), filePath, true, sem); err != nil {
+			contentID := fmt.Sprintf("%08X", tmd.Contents[i].ID)
+			contentURL := fmt.Sprintf("http://ccs.cdn.c.shop.nintendowifi.net/ccs/download/%s/%s", titleID, contentID)
+
+			filePath := filepath.Join(outputDir, contentID+".app")
+			if err := downloadFileWithSemaphore(ctx, progressReporter, client, contentURL, filePath, true, sem); err != nil {
 				return err
 			}
 
-			if tmd.Contents[i].Type&0x2 == 2 { // has a hash
-				filePath = filepath.Join(outputDir, fmt.Sprintf("%08X.h3", tmd.Contents[i].ID))
-				if err := downloadFileWithSemaphore(ctx, progressReporter, client, fmt.Sprintf("%s/%08X.h3", baseURL, tmd.Contents[i].ID), filePath, true, sem); err != nil {
+			if tmd.Contents[i].Type&0x2 == 2 {
+				hashURL := fmt.Sprintf("%s.h3", contentURL)
+				hashFilePath := filepath.Join(outputDir, contentID+".h3")
+				if err := downloadFileWithSemaphore(ctx, progressReporter, client, hashURL, hashFilePath, true, sem); err != nil {
 					return err
 				}
 			}
