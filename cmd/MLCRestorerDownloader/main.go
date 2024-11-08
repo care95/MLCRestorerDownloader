@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"strings"
 
 	downloader "github.com/Xpl0itU/MLCRestorerDownloader"
 )
@@ -119,8 +120,17 @@ func downloadTitles(region string, titles map[string][]string, titleType string)
 		if titleID == "dummy" {
 			continue
 		}
-		fmt.Printf("\n[Info] Downloading files for title %s on region %s for type %s\n\n", titleID, region, titleType)
-		if err := downloader.DownloadTitle(titleID, fmt.Sprintf("output/%s/%s/%s", titleType, region, titleID), progressReporter, client, commonKey); err != nil {
+
+		var version string
+		if parts := strings.Split(titleID, ":v"); len(parts) == 2 {
+			titleID = parts[0]
+			version = parts[1]
+			fmt.Printf("\n[Info] Downloading version %s for title %s on region %s for type %s\n\n", version, titleID, region, titleType)
+		} else {
+			fmt.Printf("\n[Info] Downloading the latest version for title %s on region %s for type %s\n\n", titleID, region, titleType)
+		}
+
+		if err := downloader.DownloadTitle(titleID, fmt.Sprintf("output/%s/%s/%s", titleType, region, titleID), progressReporter, client, commonKey, version); err != nil {
 			fmt.Println("[Error]", err)
 			failedTitles = append(failedTitles, titleID)
 			continue
